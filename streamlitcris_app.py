@@ -32,9 +32,21 @@ for msg in st.session_state.display_history:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# 6. Interfaz de Voz
-st.write("---")
-audio_data = mic_recorder(start_prompt="Haz clic para hablar 🎤", stop_prompt="Detener grabación ⏹️")
+
+# 6. Interfaz y Audio de salida
+            st.markdown(f"### 🤖 {personaje}:")
+            st.write(response.text)
+            
+            # Generar URL de voz (TTS)
+            # Limitamos a 250 caracteres para que la URL no sea demasiado larga
+            texto_voz = response.text[:250].replace(" ", "%20").replace("\n", " ")
+            tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={texto_voz}&tl=en"
+            
+            # Mostramos el reproductor visible por si el autoplay falla
+            st.audio(tts_url, format="audio/mp3", autoplay=True)
+            
+            # Un pequeño truco: agregamos un botón de "Escuchar de nuevo"
+            st.link_button("🔊 Escuchar respuesta completa", tts_url)
 
 if audio_data and student_id:
     with st.spinner("Conectando con el motor de audio 2.5..."):
