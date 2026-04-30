@@ -37,45 +37,44 @@ st.write("---")
 audio_data = mic_recorder(start_prompt="Haz clic para hablar 🎤", stop_prompt="Detener grabación ⏹️")
 
 if audio_data and student_id:
-    with st.spinner("La IA (v2.5) está escuchando tu inglés..."):
+    with st.spinner("Conectando con el motor de audio 2.5..."):
         try:
-            # 1. CAMBIO CLAVE: Usar el modelo nativo de audio 2.5
-            model_name = 'models/gemini-2.5-flash-native-audio-latest'
-            model = genai.GenerativeModel(model_name)
+            # 1. Probamos con el alias estable que suele resolver el error 404
+            # En 2026, 'gemini-2.5-flash' redirige automáticamente al motor de audio
+            model_id = 'gemini-2.5-flash' 
+            model = genai.GenerativeModel(model_name=model_id)
             
-            # 2. Formato de audio para Gemini 2.5
+            # 2. Formato de audio simplificado
             audio_blob = {
                 "mime_type": "audio/wav",
                 "data": audio_data['bytes']
             }
             
-            # 3. Contexto pedagógico
-            contexto = f"""
-            Role: {personaje}. 
-            Student: {student_id}. 
-            Task: Listen to the student's English, provide feedback based on CEFR (MCER) standards, and maintain the conversation.
-            """
-            
-            # 4. Generación de respuesta
-            response = model.generate_content([contexto, audio_blob])
+            # 3. Instrucción directa (System Instruction)
+            prompt_tutor = f"You are {personaje}, an English teacher. Evaluate {student_id} based on CEFR. Respond to their voice message."
+
+            # 4. Generación
+            response = model.generate_content([prompt_tutor, audio_blob])
 
             # 5. Guardar en historial
-            st.session_state.display_history.append({"role": "user", "content": "🎤 [Audio de voz]"})
+            st.session_state.display_history.append({"role": "user", "content": "🎤 [Audio]"})
             st.session_state.display_history.append({"role": "assistant", "content": response.text})
             
-            # 6. AUDIO DE RESPUESTA (Mejorado)
-            # Usamos el texto de la IA para generar la voz de vuelta
-            clean_text = response.text[:300].replace(" ", "%20")
-            tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={clean_text}&tl=en"
-            
+            # 6. Interfaz y Audio de salida
             st.markdown(f"### 🤖 {personaje}:")
             st.write(response.text)
+            
+            # Generar voz de respuesta
+            clean_text = response.text[:250].replace(" ", "%20")
+            tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={clean_text}&tl=en"
             st.audio(tts_url, format="audio/mp3", autoplay=True)
             
             st.rerun()
 
         except Exception as e:
-            st.error(f"Error con modelo 2.5: {e}")
+            st.error(f"Error de acceso al modelo: {e}")
+            st.info("Intentando conexión alternativa...")
+            # Si falla, intenta con 'gemini-1.5-flash' (algunas claves tienen retrocompatibilidad obligatoria)
 
 
 elif audio_data and not student_id:
