@@ -46,16 +46,30 @@ st.write("---")
 audio_data = mic_recorder(start_prompt="Haz clic para hablar 🎤", stop_prompt="Detener grabación ⏹️")
 
 if audio_data:
-    # Nota: Aquí integrarías un servicio STT (Speech to Text)
-    # Por ahora, simularemos la entrada de texto para la lógica
-    user_input = "Hello, I want to practice my English today." 
-    
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    
-    # Llamada a Gemini
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    chat = model.start_chat(history=[{"role": m["role"], "parts": [m["content"]]} for m in st.session_state.messages])
-    response = chat.send_message(user_input)
-    
-    st.session_state.messages.append({"role": "assistant", "content": response.text})
-    st.rerun()
+    # Mostramos un indicador de carga
+    with st.spinner("Escuchando y pensando..."):
+        try:
+            # 1. Convertir bytes de audio para Gemini
+            audio_bytes = audio_data['bytes']
+            
+            # 2. Enviar el audio directamente a Gemini (Multimodal)
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            
+            # Creamos el mensaje incluyendo el historial y el nuevo audio
+            # Añadimos una instrucción clara para que actúe según el rol
+            prompt_instruccion = f"Asistente, recuerda tu rol: {personaje}. Escucha este audio y responde al estudiante {student_id} de forma pedagógica siguiendo el MCER."
+            
+            response = model.generate_content([
+                prompt_instruccion,
+                {"mime_type": "audio/wav", "data": audio_bytes}
+            ])
+
+            # 3. Guardar en el historial
+            st.session_state.messages.append({"role": "user", "content": "🎤 Mensaje de voz enviado"})
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            
+            # Forzar actualización para mostrar respuesta
+            st.rerun()
+            
+        except Exception as e:
+            st.error(f"Hubo un problema procesando el audio: {e}")
