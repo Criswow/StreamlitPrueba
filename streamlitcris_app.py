@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 from streamlit_mic_recorder import mic_recorder
 
-# 1. Configuración de Seguridad (Usa Secrets de Streamlit)
+# 1. Configuración de Seguridad
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 # 2. Configuración de la Página
@@ -11,33 +11,24 @@ st.set_page_config(page_title="Tutor IA - English Project", layout="centered")
 st.title("🗣️ IA English Tutor")
 st.write("Bienvenido a tu secuencia didáctica interactiva.")
 
-# 3. Sidebar para Perfil del Estudiante y Roles
+# 3. Sidebar y Configuración
 with st.sidebar:
     st.header("Configuración")
     student_id = st.text_input("ID o Nombre del Estudiante", placeholder="Ej: Juan Pérez")
+    modo = st.selectbox("Elige tu interlocutor:", ["Profesor de Inglés", "Personaje Histórico"])
     
-    modo = st.selectbox("Elige tu interlocutor:", 
-                        ["Profesor de Inglés", "Personaje Histórico (Sugerencia)"])
-    
-    if modo == "Personaje Histórico (Sugerencia)":
+    personaje = "Tutor de Inglés"
+    if modo == "Personaje Histórico":
         personaje = st.text_input("¿Con qué personaje quieres hablar?", "Albert Einstein")
-    else:
-        personaje = "Tutor de Inglés"
 
-# 4. Prompt Base (MCER y Adaptabilidad)
-system_prompt = f"""
-Actúa como un profesor de inglés experto siguiendo el Marco Común Europeo (MCER).
-Tu rol actual es: {personaje}.
-Objetivo: Conversar con el estudiante {student_id}, detectar su nivel y corregir errores de forma pedagógica.
-Al final de la interacción, debes estar listo para generar un reporte de 'Gustos', 'Nivel' y 'Mejoras'.
-"""
-
-# 5. Lógica del Chat (Memoria de sesión)
+# 4. Inicializar Historial y Prompt
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "system", "content": system_prompt}]
+    system_prompt = f"Actúa como un profesor de inglés experto (MCER). Tu rol: {personaje}. Estudiante: {student_id}. Detecta errores y nivel de forma pedagógica."
+    st.session_state.messages = [{"role": "user", "parts": [system_prompt]}]
+    st.session_state.display_history = [] # Para mostrar en pantalla sin el system prompt
 
-# Mostrar mensajes previos (sin mostrar el system prompt)
-for msg in st.session_state.messages[1:]:
+# 5. Mostrar mensajes previos
+for msg in st.session_state.display_history:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
@@ -45,31 +36,29 @@ for msg in st.session_state.messages[1:]:
 st.write("---")
 audio_data = mic_recorder(start_prompt="Haz clic para hablar 🎤", stop_prompt="Detener grabación ⏹️")
 
-if audio_data:
-    # Mostramos un indicador de carga
-    with st.spinner("Escuchando y pensando..."):
+if audio_data and student_id:
+    with st.spinner("IA procesando..."):
         try:
-            # 1. Convertir bytes de audio para Gemini
-            audio_bytes = audio_data['bytes']
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
-            # 2. Enviar el audio directamente a Gemini (Multimodal)
-            model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
+            # Preparar el audio
+            audio_part = {"mime_type": "audio/wav", "data": audio_data['bytes']}
             
-            # Creamos el mensaje incluyendo el historial y el nuevo audio
-            # Añadimos una instrucción clara para que actúe según el rol
-            prompt_instruccion = f"Asistente, recuerda tu rol: {personaje}. Escucha este audio y responde al estudiante {student_id} de forma pedagógica siguiendo el MCER."
-            
-            response = model.generate_content([
-                prompt_instruccion,
-                {"mime_type": "audio/wav", "data": audio_bytes}
-            ])
+            # Enviar audio + historial para mantener el hilo de la conversación
+            response = model.generate_content(st.session_state.messages + [audio_part])
 
-            # 3. Guardar en el historial
-            st.session_state.messages.append({"role": "user", "content": "🎤 Mensaje de voz enviado"})
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            # Actualizar historiales
+            st.session_state.messages.append({"role": "user", "parts": ["🎤 [Audio enviado]"]})
+            st.session_state.messages.append({"role": "model", "parts": [response.text]})
+            st.session_state.display_history.append({"role": "user", "content": "🎤 Mensaje de voz"})
+            st.session_state.display_history.append({"role": "assistant", "content": response.text})
             
-            # Forzar actualización para mostrar respuesta
+            # Reproductor de audio automático (TTS básico)
+            st.audio(f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={response.text[:200]}&tl=en")
+            
             st.rerun()
-            
+
         except Exception as e:
-            st.error(f"Hubo un problema procesando el audio: {e}")
+            st.error(f"Error: {e}")
+elif audio_data and not student_id:
+    st.warning("Por favor, ingresa tu nombre en la barra lateral antes de hablar.")
