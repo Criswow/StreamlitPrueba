@@ -39,40 +39,44 @@ audio_data = mic_recorder(start_prompt="Haz clic para hablar 🎤", stop_prompt=
 if audio_data and student_id:
     with st.spinner("IA procesando..."):
         try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            # FORZAMOS LA VERSIÓN DE LA API Y EL MODELO
+            # A veces 'gemini-1.5-flash' requiere el prefijo completo en ciertas regiones
+            model_name = 'models/gemini-1.5-flash'
+            model = genai.GenerativeModel(model_name)
             
-            # 1. Convertimos el historial de mensajes a un solo bloque de texto
-            # Esto evita el error de tipo 'Content'
-            contexto_historial = "\n".join([
-                f"{m['role']}: {m['content']}" for m in st.session_state.display_history
-            ])
-            
-            # 2. Preparamos las partes: Contexto + Historial + Audio
-            prompt_final = f"""
-            System: Actúa como {personaje}. Estudiante: {student_id}. 
-            Historial previo: {contexto_historial}
-            Instrucción: Escucha el audio adjunto y responde siguiendo el hilo de la charla y el nivel MCER.
-            """
-            
-            audio_part = {
+            # 1. Preparar el audio en el formato exacto que pide la v1beta
+            audio_blob = {
                 "mime_type": "audio/wav",
                 "data": audio_data['bytes']
             }
             
-            # 3. Enviamos como una lista simple (Texto y Diccionario de Audio)
-            response = model.generate_content([prompt_final, audio_part])
+            # 2. Historial simplificado
+            contexto = f"Role: {personaje}. Student: {student_id}. MCER English Tutor."
+            
+            # 3. Generar respuesta
+            # Usamos una lista simple para evitar el error de Blob anterior
+            response = model.generate_content([contexto, audio_blob])
 
-            # 4. Actualizamos historiales para la interfaz
-            st.session_state.display_history.append({"role": "user", "content": "🎤 [Audio de voz]"})
+            # 4. Guardar para mostrar en pantalla
+            st.session_state.display_history.append({"role": "user", "content": "🎤 [Audio]"})
             st.session_state.display_history.append({"role": "assistant", "content": response.text})
             
-            # 5. Voz de respuesta (TTS)
-            st.audio(f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={response.text[:200]}&tl=en")
+            # 5. ¡SOLUCIÓN PARA ESCUCHAR! 
+            # El link anterior podía fallar. Usaremos este método más directo:
+            st.markdown(f"### 🤖 {personaje} dice:")
+            st.write(response.text)
+            
+            # Generar audio automático
+            tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={response.text[:250].replace(' ', '%20')}&tl=en"
+            st.audio(tts_url, format="audio/mp3", autoplay=True)
             
             st.rerun()
 
         except Exception as e:
-            st.error(f"Error de procesamiento: {e}")
+            st.error(f"Error detectado: {e}")
+            # Si sigue saliendo 404, esta línea nos dirá qué modelos sí puedes usar:
+            modelos_disponibles = [m.name for m in genai.list_models()]
+            st.info(f"Modelos disponibles en tu cuenta: {modelos_disponibles}")
 
 
 elif audio_data and not student_id:
