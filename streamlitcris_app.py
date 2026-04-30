@@ -37,43 +37,45 @@ st.write("---")
 audio_data = mic_recorder(start_prompt="Haz clic para hablar 🎤", stop_prompt="Detener grabación ⏹️")
 
 if audio_data and student_id:
-    with st.spinner("IA procesando tu voz..."):
+    with st.spinner("La IA (v2.5) está escuchando tu inglés..."):
         try:
-            # 1. Configurar modelo de forma explícita
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            # 1. CAMBIO CLAVE: Usar el modelo nativo de audio 2.5
+            model_name = 'models/gemini-2.5-flash-native-audio-latest'
+            model = genai.GenerativeModel(model_name)
             
-            # 2. Preparar las partes (Contexto y Audio)
-            # Pasamos el audio como un diccionario con 'mime_type' y 'data'
-            audio_part = {
+            # 2. Formato de audio para Gemini 2.5
+            audio_blob = {
                 "mime_type": "audio/wav",
                 "data": audio_data['bytes']
             }
             
-            prompt_didactico = f"Role: {personaje}. Student: {student_id}. Use CEFR/MCER standards. Respond to the audio."
+            # 3. Contexto pedagógico
+            contexto = f"""
+            Role: {personaje}. 
+            Student: {student_id}. 
+            Task: Listen to the student's English, provide feedback based on CEFR (MCER) standards, and maintain the conversation.
+            """
+            
+            # 4. Generación de respuesta
+            response = model.generate_content([contexto, audio_blob])
 
-            # 3. Generar contenido
-            response = model.generate_content([prompt_didactico, audio_part])
-
-            # 4. Guardar en historial
-            st.session_state.display_history.append({"role": "user", "content": "🎤 [Mensaje de voz]"})
+            # 5. Guardar en historial
+            st.session_state.display_history.append({"role": "user", "content": "🎤 [Audio de voz]"})
             st.session_state.display_history.append({"role": "assistant", "content": response.text})
             
-            # 5. ¡SOLUCIÓN PARA ESCUCHAR! (TTS con Autoplay)
-            # Limpiamos el texto para la URL (máximo 250 caracteres para estabilidad)
-            clean_text = response.text[:250].replace(" ", "%20").replace("\n", "")
+            # 6. AUDIO DE RESPUESTA (Mejorado)
+            # Usamos el texto de la IA para generar la voz de vuelta
+            clean_text = response.text[:300].replace(" ", "%20")
             tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={clean_text}&tl=en"
             
+            st.markdown(f"### 🤖 {personaje}:")
+            st.write(response.text)
             st.audio(tts_url, format="audio/mp3", autoplay=True)
             
             st.rerun()
 
         except Exception as e:
-            st.error(f"Error detectado: {e}")
-            # Esto nos dirá si el modelo realmente no existe en tu región
-            if "404" in str(e):
-                st.info("Intentando listar modelos disponibles...")
-                available = [m.name for m in genai.list_models()]
-                st.write(available)
+            st.error(f"Error con modelo 2.5: {e}")
 
 
 elif audio_data and not student_id:
