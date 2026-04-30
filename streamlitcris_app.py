@@ -41,24 +41,39 @@ if audio_data and student_id:
         try:
             model = genai.GenerativeModel('gemini-1.5-flash')
             
-            # Preparar el audio
-            audio_part = {"mime_type": "audio/wav", "data": audio_data['bytes']}
+            # 1. Convertimos el historial de mensajes a un solo bloque de texto
+            # Esto evita el error de tipo 'Content'
+            contexto_historial = "\n".join([
+                f"{m['role']}: {m['content']}" for m in st.session_state.display_history
+            ])
             
-            # Enviar audio + historial para mantener el hilo de la conversación
-            response = model.generate_content(st.session_state.messages + [audio_part])
+            # 2. Preparamos las partes: Contexto + Historial + Audio
+            prompt_final = f"""
+            System: Actúa como {personaje}. Estudiante: {student_id}. 
+            Historial previo: {contexto_historial}
+            Instrucción: Escucha el audio adjunto y responde siguiendo el hilo de la charla y el nivel MCER.
+            """
+            
+            audio_part = {
+                "mime_type": "audio/wav",
+                "data": audio_data['bytes']
+            }
+            
+            # 3. Enviamos como una lista simple (Texto y Diccionario de Audio)
+            response = model.generate_content([prompt_final, audio_part])
 
-            # Actualizar historiales
-            st.session_state.messages.append({"role": "user", "parts": ["🎤 [Audio enviado]"]})
-            st.session_state.messages.append({"role": "model", "parts": [response.text]})
-            st.session_state.display_history.append({"role": "user", "content": "🎤 Mensaje de voz"})
+            # 4. Actualizamos historiales para la interfaz
+            st.session_state.display_history.append({"role": "user", "content": "🎤 [Audio de voz]"})
             st.session_state.display_history.append({"role": "assistant", "content": response.text})
             
-            # Reproductor de audio automático (TTS básico)
+            # 5. Voz de respuesta (TTS)
             st.audio(f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={response.text[:200]}&tl=en")
             
             st.rerun()
 
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Error de procesamiento: {e}")
+
+
 elif audio_data and not student_id:
     st.warning("Por favor, ingresa tu nombre en la barra lateral antes de hablar.")
