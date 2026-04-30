@@ -53,7 +53,7 @@ if audio_data:
             audio_bytes = audio_data['bytes']
             
             # 2. Enviar el audio directamente a Gemini (Multimodal)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
             
             # Creamos el mensaje incluyendo el historial y el nuevo audio
             # Añadimos una instrucción clara para que actúe según el rol
