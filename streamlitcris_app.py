@@ -21,73 +21,64 @@ with st.sidebar:
     if modo == "Personaje Histórico":
         personaje = st.text_input("¿Con qué personaje quieres hablar?", "Albert Einstein")
 
-# 4. Inicializar Historial y Prompt
-if "messages" not in st.session_state:
-    system_prompt = f"Actúa como un profesor de inglés experto (MCER). Tu rol: {personaje}. Estudiante: {student_id}. Detecta errores y nivel de forma pedagógica."
-    st.session_state.messages = [{"role": "user", "parts": [system_prompt]}]
-    st.session_state.display_history = [] # Para mostrar en pantalla sin el system prompt
+# 4. Inicializar Historial y Memoria
+if "display_history" not in st.session_state:
+    st.session_state.display_history = [] 
 
-# 5. Mostrar mensajes previos
+# 5. Mostrar mensajes previos en pantalla
 for msg in st.session_state.display_history:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
+# 6. Interfaz de Grabación
+st.write("---")
+audio_data = mic_recorder(start_prompt="Haz clic para hablar 🎤", stop_prompt="Detener grabación ⏹️")
 
-# 6. Interfaz y Audio de salida
-            st.markdown(f"### 🤖 {personaje}:")
-            st.write(response.text)
-            
-            # Generar URL de voz (TTS)
-            # Limitamos a 250 caracteres para que la URL no sea demasiado larga
-            texto_voz = response.text[:250].replace(" ", "%20").replace("\n", " ")
-            tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={texto_voz}&tl=en"
-            
-            # Mostramos el reproductor visible por si el autoplay falla
-            st.audio(tts_url, format="audio/mp3", autoplay=True)
-            
-            # Un pequeño truco: agregamos un botón de "Escuchar de nuevo"
-            st.link_button("🔊 Escuchar respuesta completa", tts_url)
-
+# 7. Lógica de Procesamiento (CUANDO HAY AUDIO)
 if audio_data and student_id:
-    with st.spinner("Conectando con el motor de audio 2.5..."):
+    with st.spinner("La IA está escuchando..."):
         try:
-            # 1. Probamos con el alias estable que suele resolver el error 404
-            # En 2026, 'gemini-2.5-flash' redirige automáticamente al motor de audio
-            model_id = 'gemini-2.5-flash' 
-            model = genai.GenerativeModel(model_name=model_id)
+            # Seleccionamos el modelo más estable según tu lista de 2026
+            model = genai.GenerativeModel('gemini-2.5-flash')
             
-            # 2. Formato de audio simplificado
+            # Formato de audio para Gemini
             audio_blob = {
                 "mime_type": "audio/wav",
                 "data": audio_data['bytes']
             }
             
-            # 3. Instrucción directa (System Instruction)
-            prompt_tutor = f"You are {personaje}, an English teacher. Evaluate {student_id} based on CEFR. Respond to their voice message."
+            # Instrucción del sistema + Contexto
+            prompt_tutor = f"You are {personaje}, an English teacher. Evaluate {student_id} based on CEFR/MCER standards. Be encouraging and clear. Respond to their voice."
 
-            # 4. Generación
+            # Generación de la respuesta
             response = model.generate_content([prompt_tutor, audio_blob])
 
-            # 5. Guardar en historial
-            st.session_state.display_history.append({"role": "user", "content": "🎤 [Audio]"})
+            # Guardar en el historial de pantalla
+            st.session_state.display_history.append({"role": "user", "content": "🎤 [Mensaje de voz]"})
             st.session_state.display_history.append({"role": "assistant", "content": response.text})
             
-            # 6. Interfaz y Audio de salida
-            st.markdown(f"### 🤖 {personaje}:")
+            # --- SALIDA DE AUDIO Y TEXTO (Dentro del proceso exitoso) ---
+            st.markdown(f"### 🤖 {personaje} dice:")
             st.write(response.text)
             
-            # Generar voz de respuesta
-            clean_text = response.text[:250].replace(" ", "%20")
-            tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={clean_text}&tl=en"
+            # Limpiar texto para el motor de voz (TTS)
+            texto_voz = response.text[:250].replace(" ", "%20").replace("\n", " ")
+            tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={texto_voz}&tl=en"
+            
+            # Reproducción automática
             st.audio(tts_url, format="audio/mp3", autoplay=True)
             
+            # Botón de respaldo para escuchar
+            st.link_button("🔊 Escuchar respuesta completa", tts_url)
+            
+            # Refrescar para mostrar el nuevo mensaje en el historial
             st.rerun()
 
         except Exception as e:
-            st.error(f"Error de acceso al modelo: {e}")
-            st.info("Intentando conexión alternativa...")
-            # Si falla, intenta con 'gemini-1.5-flash' (algunas claves tienen retrocompatibilidad obligatoria)
-
+            if "429" in str(e):
+                st.error("Cuota excedida. Por favor, espera 60 segundos antes de volver a hablar.")
+            else:
+                st.error(f"Error técnico: {e}")
 
 elif audio_data and not student_id:
-    st.warning("Por favor, ingresa tu nombre en la barra lateral antes de hablar.")
+    st.warning("⚠️ Por favor, ingresa tu nombre en la barra lateral para poder evaluarte.")
